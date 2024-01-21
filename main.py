@@ -95,10 +95,13 @@ def read_item(item_id: int, q: Union[str, None] = None):
 #     # return JSONResponse(content=body, status_code=200)
 #     return JSONResponse(content=body, status_code=200)
 
-@app.post("/summary")
+@app.post("/transcription")
 async def upload_file(file: UploadFile = File(...)):
     contents = await file.read()
     data = (contents.decode('utf-8'))
     print(contents.decode('utf-8'))
-    response = supabase.table('test').insert({'id': user_id, 'texxt': data}).execute()
-    return JSONResponse(content={"message": "File contents printed successfully"}, status_code=200)
+    try:
+        supabase.table('transcripts').insert({'id': user_id, 'transcript': data}).execute()
+        return JSONResponse(content={"message": "File contents printed successfully"}, status_code=200)
+    except Exception as e:
+        return JSONResponse(content={"message": "Error printing file contents"}, status_code=500)
