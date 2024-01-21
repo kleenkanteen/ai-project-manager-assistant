@@ -7,16 +7,29 @@ from fastapi.logger import logger
 from fastapi.responses import JSONResponse
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from supabase import create_client, Client
+import os
+from dotenv import load_dotenv
+from random import randrange
+# Load environment variables from the .env file
+load_dotenv()
+MAX_RANDOM_USER_ID = 1_000_000_000
+user_id = randrange(1, MAX_RANDOM_USER_ID)
+
 
 """ We need to pass the 'Bot User OAuth Token' """
 # slack_token = os.environ.get('SLACK_BOT_TOKEN')
-slack_token = "do not commit token"
+slack_token = os.getenv('Slack_Token')
 print(f"{slack_token}")
 # Creating an instance of the Webclient class
 client = WebClient(token=slack_token)
 
 BASE_URL = "http://localhost:8000"
 USE_NGROK = "True"
+url = os.getenv('SUPABASE_URL')
+key = os.getenv('SUPABASE_ANON_KEY')
+
+supabase: Client = create_client(url, key)
 
 def init_webhooks(base_url):
     # Update inbound traffic via APIs to use the public-facing ngrok URL
@@ -85,5 +98,7 @@ def read_item(item_id: int, q: Union[str, None] = None):
 @app.post("/summary")
 async def upload_file(file: UploadFile = File(...)):
     contents = await file.read()
+    data = (contents.decode('utf-8'))
     print(contents.decode('utf-8'))
+    response = supabase.table('test').insert({'id': user_id, 'texxt': data}).execute()
     return JSONResponse(content={"message": "File contents printed successfully"}, status_code=200)
