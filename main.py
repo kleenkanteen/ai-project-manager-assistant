@@ -105,7 +105,8 @@ def daily_summary():
     today = date.today()
     today_start = today.isoformat() + "T00:00:00Z"
     today_end = today.isoformat() + "T23:59:59Z"
-    response = supabase.table("transcripts").select().execute()
+    response = supabase.table("transcripts").select('*').execute()
+    print("HAHAHAHAHA")
     # response = supabase.table("transcripts").select().filter("created_at", "gte", today_start).filter("created_at", "lte", today_end).execute()
     summaries = response.data
     print(summaries)
