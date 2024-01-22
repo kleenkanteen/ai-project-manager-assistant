@@ -66,33 +66,33 @@ def read_item(item_id: int, q: Union[str, None] = None):
 async def upload_file(file: UploadFile = File(...)):
     contents = await file.read()
     data = contents.decode("utf-8")
-    print(contents.decode("utf-8"))
+    print(type(data))
     try:
         # send to clarifai with prompt to summarize it the transcript
-        # llm_model = Clarifai(model_url="https://clarifai.com/openai/chat-completion/models/gpt-4-turbo")
-        # summary = llm_model.complete(prompt=f'''
-        #             Please generate a concise summary of the following Zoom meeting transcription, in this format. Instead of new lines, put the literal characters '\n' without the quotes for formatting:
+        llm_model = Clarifai(model_url="https://clarifai.com/openai/chat-completion/models/gpt-4-turbo")
+        summary = llm_model.complete(prompt=f'''
+                    Please generate a concise summary of the following Zoom meeting transcription, in this format. Instead of new lines, put the literal characters '\n' without the quotes for formatting:
 
-        #             Highlighting the key takeaways, major discussion points, and relevant speakers. The summary should follow the format below:
+                    Highlighting the key takeaways, major discussion points, and relevant speakers. The summary should follow the format below:
 
-        #             Takeaways:
-        #             - [List the main takeaways or actionable items discussed during the meeting]
+                   Takeaways:
+                  - [List the main takeaways or actionable items discussed during the meeting]
 
-        #             Summary:
-        #             [Provide a brief summary of the meeting's main topics and discussions, capturing the essence of the conversation]
+                   Summary:
+                   [Provide a brief summary of the meeting's main topics and discussions, capturing the essence of the conversation]
 
-        #             Speakers:
-        #             - [List the speakers' names along with their notable contributions or comments]
+                   Speakers:
+                 - [List the speakers' names along with their notable contributions or comments]
 
-        #             Additional Notes:
-        #             [Include any noteworthy information, decisions, or action items that the team should be aware of]
+                    Additional Notes:
+                   [Include any noteworthy information, decisions, or action items that the team should be aware of]
 
-        #             This summary will serve as a valuable reference for both meeting participants and those who missed the meeting, helping everyone stay informed and aligned on important matters. Please ensure clarity, brevity, and accuracy in the summary.
+                    This summary will serve as a valuable reference for both meeting participants and those who missed the meeting, helping everyone stay informed and aligned on important matters. Please ensure clarity, brevity, and accuracy in the summary.
 
-        #             Transcription: {data}
-        #             ''')
-        # print(summary)
-        # supabase.table("transcripts").insert({"transcript": data, "summary": summary}).execute()
+                    Transcription: {data}
+                    ''')
+        summary = (str(summary))
+        supabase.table("transcripts").insert({"transcript": data, "summary": summary}).execute()
         # client.chat_postMessage(channel="meetings", text=summary)
 
         return JSONResponse(
