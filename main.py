@@ -2,6 +2,7 @@ import os
 import sys
 from random import randrange
 from typing import List, Union
+from datetime import date
 
 from dotenv import load_dotenv
 
@@ -32,9 +33,9 @@ url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_ANON_KEY")
 supabase: Client = create_client(url, key)
 
-try:
+# try:
 # Posting a message in #random channel
-    response = client.chat_postMessage(channel="meetings", text="Testingaaa \n line 2")
+    # response = client.chat_postMessage(channel="meetings", text="Testingaaa \n line 2")
 # print("Done 1")
 # Sending a message to a particular user
 # response = client.chat_postEphemeral(
@@ -48,9 +49,9 @@ try:
 # response = client.conversations_list()
 # print(response["channels"])
 
-except SlackApiError as e:
-    assert e.response["error"]
-    print("slack bot error")
+# except SlackApiError as e:
+#     assert e.response["error"]
+#     print("slack bot error")
 
 app = FastAPI()
 
@@ -71,29 +72,24 @@ async def upload_file(file: UploadFile = File(...)):
         # send to clarifai with prompt to summarize it the transcript
         llm_model = Clarifai(model_url="https://clarifai.com/openai/chat-completion/models/gpt-4-turbo")
         summary = llm_model.complete(prompt=f'''
-                    Please generate a concise summary of the following Zoom meeting transcription, in this format. Instead of new lines, put the literal characters '\n' without the quotes for formatting:
+            Please generate a concise summary of the following Zoom meeting transcription, in this format. Instead of new lines, put the literal 
+            characters '\n' without the quotes for formatting:
 
-                    Highlighting the key takeaways, major discussion points, and relevant speakers. The summary should follow the format below:
+            Highlighting the key takeaways, major discussion points, and relevant speakers. The summary should follow the format below:
 
-                   Takeaways:
-                  - [List the main takeaways or actionable items discussed during the meeting]
+            Topic: [Main topic of the meeting]
 
-                   Summary:
-                   [Provide a brief summary of the meeting's main topics and discussions, capturing the essence of the conversation]
+            Speakers:
+            - [List the speakers' names along with their notable contributions or comments]
 
-                   Speakers:
-                 - [List the speakers' names along with their notable contributions or comments]
+            Summary:
+            - [Provide a brief summary of the meeting's main topics and discussions, capturing the essence of the conversation]
 
-                    Additional Notes:
-                   [Include any noteworthy information, decisions, or action items that the team should be aware of]
-
-                    This summary will serve as a valuable reference for both meeting participants and those who missed the meeting, helping everyone stay informed and aligned on important matters. Please ensure clarity, brevity, and accuracy in the summary.
-
-                    Transcription: {data}
-                    ''')
+            Transcription: {data}
+            ''')
         summary = (str(summary))
         supabase.table("transcripts").insert({"transcript": data, "summary": summary}).execute()
-        # client.chat_postMessage(channel="meetings", text=summary)
+        client.chat_postMessage(channel="meetings", text=summary)
 
         return JSONResponse(
             content={"message": "Transcript summarized with gpt-4-turbo and saved to supabase"},
@@ -106,11 +102,17 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.post("/dailysummary")
 def daily_summary():
-    print("DAILY \SUMMARY")
+    today = date.today()
+    today_start = today.isoformat() + "T00:00:00Z"
+    today_end = today.isoformat() + "T23:59:59Z"
+    response = supabase.table("transcripts").select().execute()
+    # response = supabase.table("transcripts").select().filter("created_at", "gte", today_start).filter("created_at", "lte", today_end).execute()
+    summaries = response.data
+    print(summaries)
+    summaries_string = "\n\n".join([summary['summary'] for summary in summaries])
+    full_message = "*Daily meeting summaries*\n\n" + summaries_string
+    client.chat_postMessage(channel="meetings", text=full_message)
+    return JSONResponse(content="Summaries posted to Slack", status_code=200)
     # response = client.conversations_info(channel="random")
-    response = client.conversations_list()
-    print(response["channels"])
-
-    client.chat_postMessage(channel="meetings", text="DIE\nDIE")
-    return JSONResponse(content="Line 1'\n'Line 2", status_code=200)
-
+    # response = client.conversations_list()
+    # print(response["channels"])
