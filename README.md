@@ -7,3 +7,7 @@ You also have to intall the ngrok cli. ngrok allows you to expose a local port t
 In a new terminal, run the server with `uvicorn main:app --reload`. `uvicorn` is the web server that forwards the requests to our fastapi server. `main` is the name of our fastapi entry point file, `main.py`. `--reload` means it will restart the server on code changes. The server will run on port 8000 by default. ngrok will listen to the requests on port 8000 and forward them to your local server.
 
 You put the url that ngrok gives you into the zapier post webhook url in the action panel.
+
+run the code. 
+
+lines 72 to 94 are problematic. sending the trnascript to clarifai and getting the response back is not working. but everything else is.
