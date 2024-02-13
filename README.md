@@ -11,3 +11,32 @@ You put the url that ngrok gives you into the zapier post webhook url in the act
 run the code. 
 
 lines 72 to 94 are problematic. sending the trnascript to clarifai and getting the response back is not working. but everything else is.
+
+
+
+To run Rag for your Meetings you have to run first postman and go to endpoint ./meeting_ids (Example:- http://127.0.0.1:8000/meeting_ids) 
+
+After that you will get your meeting id with summary of each meetings 
+
+Now you have to change endpoint to ./dailysummary/rag/{id}  (Example :- http://127.0.0.1:8000/dailysummary/rag/17) and send post request with below Json type
+
+```json
+{
+    "model": "gpt-4",
+    "response_format": {"type": "json_object"},
+    "messages": [
+        {
+            "role": "system",
+            "content": "You are helpful Assistant who is knowldgeable about meetings and their information about it",
+            "topic": "seller"
+        },
+        {
+            "role": "user",
+            "content": "What is meeting about?"
+        }
+    ]
+}
+```
+
+Now you can change content of user to ask any question about meetings
+
