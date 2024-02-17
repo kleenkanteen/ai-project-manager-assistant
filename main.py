@@ -17,41 +17,52 @@ from supabase import Client, create_client
 import shutil
 import nest_asyncio
 import json
+import logging
+from llama_index.core import StorageContext
+from llama_index.core import VectorStoreIndex,SimpleDirectoryReader,ServiceContext,PromptTemplate
+from llama_index.vector_stores.weaviate import WeaviateVectorStore
+from llama_index.core.response.notebook_utils import display_response
+from llama_index.llms.clarifai import Clarifai
+from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from llama_index.core import Document, VectorStoreIndex
+from llama_index.core import StorageContext
+import weaviate
 
 nest_asyncio.apply()
 
-from llama_index.evaluation import generate_question_context_pairs
-from llama_index import VectorStoreIndex, SimpleDirectoryReader, ServiceContext
-from llama_index.node_parser import SimpleNodeParser
-from llama_index.evaluation import generate_question_context_pairs
-from llama_index.evaluation import RetrieverEvaluator
-from llama_index.llms import OpenAI
-from llama_index.llms.clarifai import Clarifai
-from llama_index.llms import ChatMessage
-from datetime import datetime
-from datetime import datetime, timedelta, timezone
+
+
 
 # Get the current date and time
 current_date_time = datetime.now()
 current_date = current_date_time.date()
 
 
-
-
 # Load environment variables from the .env file
 load_dotenv()
 
-os.environ["CLARIFAI_PAT"] = os.getenv("CLARIFAI_PAT") #you can replace with your PAT or use mine
 
 """ We need to pass the 'Bot User OAuth Token' """
 # slack_token = os.environ.get('SLACK_BOT_TOKEN')
+os.environ["CLARIFAI_PAT"] = os.getenv("CLARIFAI_PAT") #you can replace with your PAT or use mine
 slack_token = os.getenv("SLACK_TOKEN")
-client = WebClient(token=slack_token)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_ANON_KEY")
+WEAVIATE_API_KEY = os.getenv("WEAVIATE_API_KEY")
+WEAVIATE_URL = os.getenv("WEAVIATE_URL")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
+client = WebClient(token=slack_token)
 supabase: Client = create_client(url, key)
 
+auth_config = weaviate.AuthApiKey(api_key=WEAVIATE_API_KEY)
+
+client = weaviate.Client(
+  url=WEAVIATE_URL,
+  auth_client_secret=auth_config
+)
 
 # try:
 # Posting a message in #random channel
@@ -74,16 +85,18 @@ supabase: Client = create_client(url, key)
 #     print("slack bot error")
 
 app = FastAPI()
+import os
 
-def search_and_query(text):
-    documents = SimpleDirectoryReader("./Data").load_data()
-    llm = OpenAI(model="gpt-4")
-    node_parser = SimpleNodeParser.from_defaults(chunk_size=512)
-    nodes = node_parser.get_nodes_from_documents(documents)
-    vector_index = VectorStoreIndex(nodes)
-    query_engine = vector_index.as_query_engine()
-    response_vector = query_engine.query(f"{text}")
-    return str(response_vector.response)
+def search_and_query(text, ask):
+    text_list = [text]
+    documents = [Document(text=t) for t in text_list]
+    vector_store = WeaviateVectorStore(weaviate_client=client)
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
+    query_engine = index.as_query_engine(similarity_top_k=2)
+    response = query_engine.query(ask)
+    return response
+
 
 @app.get("/")
 def read_root():
@@ -135,13 +148,14 @@ def daily_summary():
     today = date.today()
     today_start = today.isoformat() + "T00:00:00Z"
     today_end = today.isoformat() + "T23:59:59Z"
-    response = supabase.table("transcripts").select('*').execute()
+    #response = supabase.table("transcripts").select('*').execute()
     print("HAHAHAHAHA")
-    # response = supabase.table("transcripts").select().filter("created_at", "gte", today_start).filter("created_at", "lte", today_end).execute()
+    response = supabase.table("transcripts").select().filter("created_at", "gte", today_start).filter("created_at", "lte", today_end).execute()
     summaries = response.data
     print(summaries)
     summaries_string = "\n\n".join([summary['summary'] for summary in summaries])
     full_message = "*Daily meeting summaries*\n\n" + summaries_string
+    print(full_message)
     client.chat_postMessage(channel="meetings", text=full_message)
     return JSONResponse(content="Summaries posted to Slack", status_code=200)
     # response = client.conversations_info(channel="random")
@@ -149,26 +163,13 @@ def daily_summary():
     # print(response["channels"])
 
 
-@app.post('/meeting_ids')
-def metting_id():
-    response = supabase.table("transcripts").select('id','summary').execute()
-    
 
-    #ids = response['id']
-    return JSONResponse(content={'Response': str(response)}, status_code=200)
-
-@app.post("/dailysummary/rag/{title}")
-def daily_summary(data: dict, title: str = Path(..., title="The title of the daily summary")):
+@app.post("/rag")
+def daily_summary(data: dict):
     messages = data.get("messages", [])
     user_message = next((msg["content"] for msg in messages if msg["role"] == "user"), None)
-    response = supabase.table("transcripts").select('*').eq('id', title).execute()
-    dat = response.data[0]['transcript']
-    directory_path = './Data'
-    os.makedirs(directory_path, exist_ok=True)
-    file_path = os.path.join(directory_path, 'example.txt')
-    text_string = str(dat)
-    with open(file_path, 'w') as file:
-        file.write(text_string)  
-    out = search_and_query(user_message)
-    print(out)
+    response = supabase.table("transcripts").select('transcript').execute()
+    summaries_dated = response.data
+    text_string = str(summaries_dated) 
+    out = search_and_query(text_string, user_message)
     return JSONResponse(content={"title": f"{out}"}, status_code=200)
