@@ -10,8 +10,11 @@ from fastapi.logger import logger
 from fastapi.responses import JSONResponse
 from pyngrok import ngrok
 import os
+from broker import cloudamqp
 import weaviate
 from slack_sdk import WebClient
+from slack_bolt import App
+from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk.errors import SlackApiError
 from supabase import Client, create_client
 import shutil
@@ -19,14 +22,12 @@ import nest_asyncio
 import json
 import logging
 from llama_index.core import StorageContext
-from llama_index.core import VectorStoreIndex,SimpleDirectoryReader,ServiceContext,PromptTemplate
+from llama_index.core import VectorStoreIndex,SimpleDirectoryReader,ServiceContext,PromptTemplate, Document
 from llama_index.vector_stores.weaviate import WeaviateVectorStore
 from llama_index.core.response.notebook_utils import display_response
 from llama_index.llms.clarifai import Clarifai
-from datetime import datetime
 from datetime import datetime, timedelta, timezone
-from llama_index.core import Document, VectorStoreIndex
-from llama_index.core import StorageContext
+from llama_index.core.node_parser import SimpleNodeParser
 import weaviate
 
 nest_asyncio.apply()
@@ -59,30 +60,12 @@ supabase: Client = create_client(url, key)
 
 auth_config = weaviate.AuthApiKey(api_key=WEAVIATE_API_KEY)
 
-client = weaviate.Client(
+cllient = weaviate.Client(
   url=WEAVIATE_URL,
   auth_client_secret=auth_config
 )
+rag_bot = App(token=os.environ.get("RAG_TOKEN"))
 
-# try:
-# Posting a message in #random channel
-    # response = client.chat_postMessage(channel="meetings", text="Testingaaa \n line 2")
-# print("Done 1")
-# Sending a message to a particular user
-# response = client.chat_postEphemeral(
-#     channel="random", text="Hello U06ETJNQX6E", user="U06ETJNQX6E"
-# )
-# print("Done 2")
-# Get basic information of the channel where our Bot has access
-# response = client.conversations_info(channel="random")
-# print("Done 3")
-# Get a list of conversations
-# response = client.conversations_list()
-# print(response["channels"])
-
-# except SlackApiError as e:
-#     assert e.response["error"]
-#     print("slack bot error")
 
 app = FastAPI()
 import os
@@ -90,7 +73,9 @@ import os
 def search_and_query(text, ask):
     text_list = [text]
     documents = [Document(text=t) for t in text_list]
-    vector_store = WeaviateVectorStore(weaviate_client=client)
+    parser = SimpleNodeParser.from_defaults(chunk_size=1024, chunk_overlap=20)
+    nodes = parser.get_nodes_from_documents(documents)
+    vector_store = WeaviateVectorStore(weaviate_client=cllient)
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
     index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
     query_engine = index.as_query_engine(similarity_top_k=2)
@@ -158,18 +143,24 @@ def daily_summary():
     print(full_message)
     client.chat_postMessage(channel="meetings", text=full_message)
     return JSONResponse(content="Summaries posted to Slack", status_code=200)
-    # response = client.conversations_info(channel="random")
-    # response = client.conversations_list()
-    # print(response["channels"])
 
 
-
-@app.post("/rag")
-def daily_summary(data: dict):
-    messages = data.get("messages", [])
-    user_message = next((msg["content"] for msg in messages if msg["role"] == "user"), None)
+@rag_bot.message("")
+def message_hello(message, say):
     response = supabase.table("transcripts").select('transcript').execute()
     summaries_dated = response.data
     text_string = str(summaries_dated) 
-    out = search_and_query(text_string, user_message)
-    return JSONResponse(content={"title": f"{out}"}, status_code=200)
+    out = search_and_query(text_string, message['text'])
+    say(str(out))
+    
+
+if __name__== "__main__":
+    
+    tasks = [
+        SocketModeHandler(rag_bot, os.environ.get("RAG_SOCKET_TOKEN")).start(),
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    ]
+
+    # Run both tasks concurrently
+    asyncio.run(asyncio.gather(*tasks))
+
