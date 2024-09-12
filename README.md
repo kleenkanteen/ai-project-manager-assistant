@@ -1,3 +1,5 @@
+2nd place winner in the [lablabai AI hackathon](https://lablab.ai/event/nextgen-gpt-ai-hackathon) among 47 submissions. I hatched the idea and invited both team members. [Demo](https://lablab.ai/event/nextgen-gpt-ai-hackathon/jarvis/ai-project-manager-assistant)
+
 API server for the project manager assistant slack bot.
 
 First install the dependencies with `pip install -r requirements.txt`. Didn't use a virtual env cus it didn't work and I was running out of time xD.
